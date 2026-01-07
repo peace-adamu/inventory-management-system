@@ -1,6 +1,6 @@
 """
 Inventory Management System - Multi-Agent Streamlit Interface
-Connects to your Google Sheets for real-time inventory management.
+Connected to the database Google Sheets for real-time inventory management.
 """
 
 import streamlit as st
