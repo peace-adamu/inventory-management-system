@@ -91,7 +91,7 @@ def main():
     
     # Header
     st.markdown('<h1 class="main-header">📊 Inventory Management System</h1>', unsafe_allow_html=True)
-    st.markdown("**Multi-Agent System connected to your Google Sheets**")
+    st.markdown("**Multi-Agent System connected to Google Sheets as Database**")
     
     # Check system status
     if not AGENTS_AVAILABLE:
