@@ -1,6 +1,6 @@
 # 📊 Multi-Agent Inventory Management System
 
-A sophisticated inventory management system powered by specialized AI agents that connect to your Google Sheets for real-time inventory tracking, analysis, and optimization.
+A sophisticated inventory management system powered by specialized AI agents that connect to Darabase Google Sheets for real-time inventory tracking, analysis, and optimization.
 
 ## 🤖 Multi-Agent Architecture
 

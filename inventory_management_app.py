@@ -10,6 +10,22 @@ from typing import Dict, Any, List
 import pandas as pd
 from datetime import datetime
 
+# Visualization libraries
+try:
+    import plotly.express as px
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+    PLOTLY_AVAILABLE = True
+except ImportError:
+    PLOTLY_AVAILABLE = False
+
+try:
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    MATPLOTLIB_AVAILABLE = True
+except ImportError:
+    MATPLOTLIB_AVAILABLE = False
+
 # Add src to path for imports
 sys.path.append('src')
 
@@ -18,6 +34,17 @@ try:
     from dotenv import load_dotenv
     load_dotenv()
 except ImportError:
+    pass
+
+# For Streamlit Cloud, also try to load from secrets
+try:
+    import streamlit as st
+    # Set environment variables from Streamlit secrets if available
+    if hasattr(st, 'secrets'):
+        for key in st.secrets:
+            if key not in os.environ:
+                os.environ[key] = st.secrets[key]
+except:
     pass
 
 # Import our agents and tools
@@ -100,7 +127,12 @@ def main():
     
     # Initialize session state
     if 'coordinator' not in st.session_state:
-        spreadsheet_id = os.getenv("GOOGLE_SHEETS_INVENTORY_ID")
+        # Try to get spreadsheet ID from multiple sources
+        spreadsheet_id = (
+            os.getenv("GOOGLE_SHEETS_INVENTORY_ID") or 
+            st.secrets.get("GOOGLE_SHEETS_INVENTORY_ID", None) or
+            "1CyA1nOnQ8Bzdqi60Xqk8dWcL32Zpx6ktUw_-HTeKNE8"  # Fallback to your sheet
+        )
         st.session_state.coordinator = InventoryCoordinatorAgent(spreadsheet_id=spreadsheet_id)
     
     # Sidebar navigation
@@ -151,9 +183,282 @@ def main():
         show_system_settings()
 
 def show_dashboard():
-    """Display executive dashboard."""
+    """Display executive dashboard with visualizations."""
     st.markdown("## 🏠 Executive Dashboard")
     
+    # Get inventory data for visualizations
+    try:
+        from src.tools.google_sheets_inventory_tool import GoogleSheetsInventoryTool, GoogleSheetsInventoryInput
+        sheets_tool = GoogleSheetsInventoryTool()
+        result = sheets_tool.execute(GoogleSheetsInventoryInput(action="list_all"))
+        
+        if result.success and result.result:
+            products_data = result.result
+            df = pd.DataFrame(products_data)
+            
+            # Display visualizations
+            show_inventory_visualizations(df)
+            
+        else:
+            st.warning("⚠️ Could not load inventory data for visualizations")
+            show_basic_dashboard()
+            
+    except Exception as e:
+        st.error(f"❌ Error loading data: {str(e)}")
+        show_basic_dashboard()
+
+def show_inventory_visualizations(df: pd.DataFrame):
+    """Display comprehensive inventory visualizations."""
+    
+    # Key Metrics Row
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        total_products = len(df)
+        st.metric("📦 Total Products", total_products)
+    
+    with col2:
+        total_quantity = df['quantity'].sum()
+        st.metric("📊 Total Units", f"{total_quantity:,}")
+    
+    with col3:
+        total_value = (df['quantity'] * df['price']).sum()
+        st.metric("💰 Total Value", f"${total_value:,.2f}")
+    
+    with col4:
+        avg_price = df['price'].mean()
+        st.metric("💵 Avg Price", f"${avg_price:.2f}")
+    
+    st.markdown("---")
+    
+    # Charts Row 1
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Stock Status Distribution (Pie Chart)
+        st.markdown("### 📊 Stock Status Distribution")
+        
+        if PLOTLY_AVAILABLE:
+            status_counts = df['status'].value_counts()
+            
+            colors = {
+                'in_stock': '#28a745',
+                'low_stock': '#ffc107', 
+                'out_of_stock': '#dc3545'
+            }
+            
+            fig = px.pie(
+                values=status_counts.values,
+                names=status_counts.index,
+                title="Stock Status Breakdown",
+                color=status_counts.index,
+                color_discrete_map=colors
+            )
+            fig.update_traces(textposition='inside', textinfo='percent+label')
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            # Fallback to simple metrics
+            status_counts = df['status'].value_counts()
+            for status, count in status_counts.items():
+                st.metric(status.replace('_', ' ').title(), count)
+    
+    with col2:
+        # Category Value Distribution (Bar Chart)
+        st.markdown("### 💰 Value by Category")
+        
+        if PLOTLY_AVAILABLE:
+            df['total_value'] = df['quantity'] * df['price']
+            category_values = df.groupby('category')['total_value'].sum().sort_values(ascending=False)
+            
+            fig = px.bar(
+                x=category_values.index,
+                y=category_values.values,
+                title="Inventory Value by Category",
+                labels={'x': 'Category', 'y': 'Total Value ($)'},
+                color=category_values.values,
+                color_continuous_scale='viridis'
+            )
+            fig.update_layout(showlegend=False)
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            # Fallback to dataframe
+            df['total_value'] = df['quantity'] * df['price']
+            category_summary = df.groupby('category').agg({
+                'total_value': 'sum',
+                'quantity': 'sum'
+            }).round(2)
+            st.dataframe(category_summary)
+    
+    # Charts Row 2
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Top Products by Value (Horizontal Bar)
+        st.markdown("### 🏆 Top Products by Value")
+        
+        if PLOTLY_AVAILABLE:
+            df['product_value'] = df['quantity'] * df['price']
+            top_products = df.nlargest(10, 'product_value')
+            
+            fig = px.bar(
+                top_products,
+                x='product_value',
+                y='product_name',
+                orientation='h',
+                title="Top 10 Products by Total Value",
+                labels={'product_value': 'Total Value ($)', 'product_name': 'Product'},
+                color='product_value',
+                color_continuous_scale='blues'
+            )
+            fig.update_layout(height=400, showlegend=False)
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            # Fallback to dataframe
+            df['product_value'] = df['quantity'] * df['price']
+            top_products = df.nlargest(5, 'product_value')[['product_name', 'product_value']]
+            st.dataframe(top_products)
+    
+    with col2:
+        # Stock Levels (Scatter Plot)
+        st.markdown("### 📈 Stock Levels vs Price")
+        
+        if PLOTLY_AVAILABLE:
+            fig = px.scatter(
+                df,
+                x='price',
+                y='quantity',
+                size='quantity',
+                color='category',
+                hover_name='product_name',
+                title="Stock Quantity vs Unit Price",
+                labels={'price': 'Unit Price ($)', 'quantity': 'Stock Quantity'}
+            )
+            
+            # Add threshold lines
+            fig.add_hline(y=10, line_dash="dash", line_color="orange", 
+                         annotation_text="Low Stock Threshold")
+            fig.add_hline(y=0, line_dash="dash", line_color="red", 
+                         annotation_text="Out of Stock")
+            
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            # Fallback to simple scatter
+            st.scatter_chart(df.set_index('product_name')[['price', 'quantity']])
+    
+    # Charts Row 3 - Financial Analysis
+    st.markdown("---")
+    st.markdown("### 💹 Financial Analysis")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        # Price Distribution
+        st.markdown("#### 💵 Price Distribution")
+        
+        if PLOTLY_AVAILABLE:
+            fig = px.histogram(
+                df,
+                x='price',
+                nbins=20,
+                title="Product Price Distribution",
+                labels={'price': 'Unit Price ($)', 'count': 'Number of Products'}
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.bar_chart(df['price'].value_counts())
+    
+    with col2:
+        # Quantity Distribution
+        st.markdown("#### 📦 Quantity Distribution")
+        
+        if PLOTLY_AVAILABLE:
+            fig = px.histogram(
+                df,
+                x='quantity',
+                nbins=15,
+                title="Stock Quantity Distribution",
+                labels={'quantity': 'Stock Quantity', 'count': 'Number of Products'}
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.bar_chart(df['quantity'].value_counts())
+    
+    with col3:
+        # Category Summary
+        st.markdown("#### 📊 Category Summary")
+        
+        category_stats = df.groupby('category').agg({
+            'quantity': ['sum', 'mean'],
+            'price': 'mean',
+            'product_name': 'count'
+        }).round(2)
+        
+        category_stats.columns = ['Total Qty', 'Avg Qty', 'Avg Price', 'Products']
+        st.dataframe(category_stats)
+    
+    # Stock Alerts Section
+    st.markdown("---")
+    st.markdown("### 🚨 Stock Alerts")
+    
+    # Identify problem items
+    out_of_stock = df[df['quantity'] == 0]
+    low_stock = df[(df['quantity'] > 0) & (df['quantity'] <= 10)]
+    
+    alert_col1, alert_col2 = st.columns(2)
+    
+    with alert_col1:
+        if len(out_of_stock) > 0:
+            st.error(f"🚨 **{len(out_of_stock)} Out of Stock Items**")
+            for _, item in out_of_stock.iterrows():
+                st.write(f"• {item['product_name']} ({item['product_id']})")
+        else:
+            st.success("✅ No out of stock items")
+    
+    with alert_col2:
+        if len(low_stock) > 0:
+            st.warning(f"⚠️ **{len(low_stock)} Low Stock Items**")
+            for _, item in low_stock.head(5).iterrows():
+                st.write(f"• {item['product_name']}: {item['quantity']} units")
+        else:
+            st.success("✅ No low stock alerts")
+    
+    # Interactive Data Table
+    st.markdown("---")
+    st.markdown("### 📋 Interactive Inventory Data")
+    
+    # Add filters
+    filter_col1, filter_col2, filter_col3 = st.columns(3)
+    
+    with filter_col1:
+        category_filter = st.selectbox("Filter by Category", ["All"] + list(df['category'].unique()))
+    
+    with filter_col2:
+        status_filter = st.selectbox("Filter by Status", ["All"] + list(df['status'].unique()))
+    
+    with filter_col3:
+        min_quantity = st.number_input("Min Quantity", min_value=0, value=0)
+    
+    # Apply filters
+    filtered_df = df.copy()
+    
+    if category_filter != "All":
+        filtered_df = filtered_df[filtered_df['category'] == category_filter]
+    
+    if status_filter != "All":
+        filtered_df = filtered_df[filtered_df['status'] == status_filter]
+    
+    filtered_df = filtered_df[filtered_df['quantity'] >= min_quantity]
+    
+    # Display filtered data
+    st.dataframe(
+        filtered_df[['product_id', 'product_name', 'quantity', 'price', 'category', 'status']],
+        use_container_width=True
+    )
+    
+    st.markdown(f"**Showing {len(filtered_df)} of {len(df)} products**")
+
+def show_basic_dashboard():
+    """Fallback dashboard without data visualizations."""
     col1, col2 = st.columns([2, 1])
     
     with col1:
@@ -161,35 +466,26 @@ def show_dashboard():
             with st.spinner("Generating dashboard..."):
                 response = st.session_state.coordinator.process_message("generate dashboard")
                 st.markdown(response)
-        
-        # Auto-load dashboard on first visit
-        if 'dashboard_loaded' not in st.session_state:
-            with st.spinner("Loading dashboard..."):
-                response = st.session_state.coordinator.process_message("generate dashboard")
-                st.markdown(response)
-                st.session_state.dashboard_loaded = True
     
     with col2:
         st.markdown("### 🚀 Quick Actions")
         
-        if st.button("🚨 Stock Alerts"):
+        if st.button("🚨 Stock Alerts", key="alerts_btn"):
             with st.spinner("Checking alerts..."):
                 response = st.session_state.coordinator.process_message("generate stock alerts")
+                st.markdown("### 🚨 Stock Alerts")
                 st.markdown(response)
         
-        if st.button("📋 Low Stock Report"):
+        if st.button("📋 Low Stock Report", key="low_stock_btn"):
             with st.spinner("Generating report..."):
                 response = st.session_state.coordinator.process_message("show low stock report")
+                st.markdown("### 📋 Low Stock Report")
                 st.markdown(response)
         
-        if st.button("💰 Financial Summary"):
+        if st.button("💰 Financial Summary", key="financial_btn"):
             with st.spinner("Calculating..."):
                 response = st.session_state.coordinator.process_message("calculate inventory values")
-                st.markdown(response)
-        
-        if st.button("🎯 Action Plan"):
-            with st.spinner("Creating plan..."):
-                response = st.session_state.coordinator.process_message("generate action plan")
+                st.markdown("### 💰 Financial Summary")
                 st.markdown(response)
 
 def show_inventory_analysis():
