@@ -277,14 +277,18 @@ class GoogleSheetsInventoryTool(BaseTool):
         if not all([product_id, product_name, quantity is not None, price is not None, category]):
             raise ValueError("All fields required: product_id, product_name, quantity, price, category")
         
+        # Handle public sheet access (read-only)
+        if self._is_public_sheet:
+            raise ValueError("Cannot add products to public sheet. Sheet is read-only.")
+        
         worksheet = self._get_worksheet()
         
         # Check if product already exists
         try:
             worksheet.find(product_id)
             raise ValueError(f"Product {product_id} already exists")
-        except gspread.CellNotFound:
-            pass  # Good, product doesn't exist
+        except Exception:
+            pass  # Good, product doesn't exist (catch all exceptions instead of specific gspread.CellNotFound)
         
         # Add new row
         from datetime import datetime

@@ -774,6 +774,9 @@ def show_data_management():
     with tab2:
         st.markdown("### ➕ Add New Product")
         
+        # Add information about sheet access
+        st.info("ℹ️ **Note**: Adding products requires write access to Google Sheets. If using a public sheet, it will be read-only.")
+        
         with st.form("add_product_form"):
             col1, col2 = st.columns(2)
             
@@ -805,11 +808,24 @@ def show_data_management():
                             if result.success:
                                 st.success(f"✅ Product {product_id} added successfully!")
                                 st.json(result.result)
+                                # Clear the form by rerunning
+                                st.rerun()
                             else:
-                                st.error(f"❌ Error adding product: {result.error}")
+                                if "read-only" in str(result.error).lower():
+                                    st.warning("⚠️ **Sheet is Read-Only**: Your Google Sheet is configured as public/read-only. To add products, you need:")
+                                    st.markdown("""
+                                    1. **Create a private Google Sheet** with edit permissions
+                                    2. **Set up Google Sheets API credentials** for write access
+                                    3. **Or manually add products** to your Google Sheet
+                                    
+                                    For now, you can view and analyze existing data, but cannot add new products through the app.
+                                    """)
+                                else:
+                                    st.error(f"❌ Error adding product: {result.error}")
                                 
                         except Exception as e:
-                            st.error(f"❌ Error: {str(e)}")
+                            st.error(f"❌ Unexpected error: {str(e)}")
+                            st.info("💡 **Tip**: If you're using a public Google Sheet, it's read-only. Consider setting up proper Google Sheets API credentials for write access.")
                 else:
                     st.error("❌ Please fill in all required fields")
     
