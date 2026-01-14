@@ -52,6 +52,7 @@ try:
     from agents.inventory_coordinator_agent import InventoryCoordinatorAgent
     from agents.inventory_agent import InventoryAgent
     from agents.stock_calculator_agent import StockCalculatorAgent
+    from agents.transaction_agent import TransactionAgent
     from tools.google_sheets_inventory_tool import GoogleSheetsInventoryTool, GoogleSheetsInventoryInput
     AGENTS_AVAILABLE = True
 except ImportError as e:
@@ -145,6 +146,7 @@ def main():
                 "🏠 Dashboard",
                 "📊 Inventory Analysis", 
                 "🧮 Stock Calculations",
+                "💰 Transaction Management",
                 "🤖 Multi-Agent Chat",
                 "📝 Data Management",
                 "⚙️ System Settings"
@@ -175,6 +177,8 @@ def main():
         show_inventory_analysis()
     elif page == "🧮 Stock Calculations":
         show_stock_calculations()
+    elif page == "💰 Transaction Management":
+        show_transaction_management()
     elif page == "🤖 Multi-Agent Chat":
         show_multi_agent_chat()
     elif page == "📝 Data Management":
@@ -398,29 +402,73 @@ def show_inventory_visualizations(df: pd.DataFrame):
     
     # Stock Alerts Section
     st.markdown("---")
-    st.markdown("### 🚨 Stock Alerts")
+    st.markdown("### 🚨 Real-Time Stock Alerts")
     
-    # Identify problem items
+    # Identify problem items with enhanced categorization
     out_of_stock = df[df['quantity'] == 0]
-    low_stock = df[(df['quantity'] > 0) & (df['quantity'] <= 10)]
+    critical_stock = df[(df['quantity'] > 0) & (df['quantity'] <= 5)]
+    low_stock = df[(df['quantity'] > 5) & (df['quantity'] <= 10)]
     
-    alert_col1, alert_col2 = st.columns(2)
+    alert_col1, alert_col2, alert_col3 = st.columns(3)
     
     with alert_col1:
         if len(out_of_stock) > 0:
-            st.error(f"🚨 **{len(out_of_stock)} Out of Stock Items**")
-            for _, item in out_of_stock.iterrows():
+            st.error(f"🚨 **{len(out_of_stock)} OUT OF STOCK**")
+            st.markdown("**Cannot sell these items:**")
+            for _, item in out_of_stock.head(3).iterrows():
                 st.write(f"• {item['product_name']} ({item['product_id']})")
+                st.write(f"  💰 Lost revenue: ${item['price']:.2f}/unit")
+            if len(out_of_stock) > 3:
+                st.write(f"... and {len(out_of_stock) - 3} more")
         else:
             st.success("✅ No out of stock items")
     
     with alert_col2:
+        if len(critical_stock) > 0:
+            st.error(f"🔴 **{len(critical_stock)} CRITICAL STOCK**")
+            st.markdown("**Limit sales to 1 per customer:**")
+            for _, item in critical_stock.head(3).iterrows():
+                st.write(f"• {item['product_name']}: {item['quantity']} left")
+                st.write(f"  💰 At risk: ${item['quantity'] * item['price']:.2f}")
+            if len(critical_stock) > 3:
+                st.write(f"... and {len(critical_stock) - 3} more")
+        else:
+            st.success("✅ No critical stock alerts")
+    
+    with alert_col3:
         if len(low_stock) > 0:
-            st.warning(f"⚠️ **{len(low_stock)} Low Stock Items**")
-            for _, item in low_stock.head(5).iterrows():
+            st.warning(f"⚠️ **{len(low_stock)} LOW STOCK**")
+            st.markdown("**Monitor closely:**")
+            for _, item in low_stock.head(3).iterrows():
                 st.write(f"• {item['product_name']}: {item['quantity']} units")
+                st.write(f"  💰 Value: ${item['quantity'] * item['price']:.2f}")
+            if len(low_stock) > 3:
+                st.write(f"... and {len(low_stock) - 3} more")
         else:
             st.success("✅ No low stock alerts")
+    
+    # Quick Actions for Stock Alerts
+    if len(out_of_stock) > 0 or len(critical_stock) > 0 or len(low_stock) > 0:
+        st.markdown("#### 🚀 Quick Actions")
+        
+        action_col1, action_col2, action_col3 = st.columns(3)
+        
+        with action_col1:
+            if st.button("📧 Email Stock Alert", help="Send stock alert to management"):
+                st.info("📧 Stock alert email functionality would be implemented here")
+        
+        with action_col2:
+            if st.button("📋 Generate Reorder List", help="Create purchase order list"):
+                reorder_items = pd.concat([out_of_stock, critical_stock, low_stock])
+                if not reorder_items.empty:
+                    st.markdown("**Suggested Reorder Quantities:**")
+                    for _, item in reorder_items.iterrows():
+                        suggested_qty = max(20, item['quantity'] * 3)  # Suggest 3x current or minimum 20
+                        st.write(f"• {item['product_name']}: {suggested_qty} units")
+        
+        with action_col3:
+            if st.button("🔄 Refresh Stock Data", help="Reload latest inventory data"):
+                st.rerun()
     
     # Interactive Data Table
     st.markdown("---")
@@ -470,6 +518,7 @@ def show_basic_dashboard():
     with col2:
         st.markdown("### 🚀 Quick Actions")
         
+        # Quick action buttons
         if st.button("🚨 Stock Alerts", key="alerts_btn"):
             with st.spinner("Checking alerts..."):
                 response = st.session_state.coordinator.process_message("generate stock alerts")
@@ -487,6 +536,55 @@ def show_basic_dashboard():
                 response = st.session_state.coordinator.process_message("calculate inventory values")
                 st.markdown("### 💰 Financial Summary")
                 st.markdown(response)
+        
+        if st.button("📊 Transaction Summary", key="transaction_btn"):
+            with st.spinner("Loading transactions..."):
+                response = st.session_state.coordinator.process_message("daily summary")
+                st.markdown("### 📊 Today's Transactions")
+                st.markdown(response)
+    
+    # Quick Sale Section
+    st.markdown("---")
+    st.markdown("### 💰 Quick Sale")
+    
+    with st.form("dashboard_quick_sale"):
+        col_a, col_b, col_c = st.columns([2, 1, 1])
+        
+        with col_a:
+            quick_product_id = st.text_input("Product ID", placeholder="e.g., LAPTOP001")
+        
+        with col_b:
+            quick_quantity = st.number_input("Quantity", min_value=1, value=1)
+        
+        with col_c:
+            st.write("") # Spacer
+            quick_sale_btn = st.form_submit_button("💰 Quick Sale", type="primary")
+        
+        if quick_sale_btn and quick_product_id:
+            with st.spinner("Processing quick sale..."):
+                try:
+                    # Initialize transaction agent if not exists
+                    if 'transaction_agent' not in st.session_state:
+                        spreadsheet_id = (
+                            os.getenv("GOOGLE_SHEETS_INVENTORY_ID") or 
+                            st.secrets.get("GOOGLE_SHEETS_INVENTORY_ID", None) or
+                            "1CyA1nOnQ8Bzdqi60Xqk8dWcL32Zpx6ktUw_-HTeKNE8"
+                        )
+                        st.session_state.transaction_agent = TransactionAgent(spreadsheet_id=spreadsheet_id)
+                    
+                    # Process the sale
+                    message = f"Quick sale: {quick_quantity} {quick_product_id}"
+                    response = st.session_state.transaction_agent.process_message(message)
+                    
+                    if "✅" in response:
+                        st.success("✅ Quick sale completed!")
+                        st.markdown(response)
+                    else:
+                        st.error("❌ Quick sale failed!")
+                        st.markdown(response)
+                        
+                except Exception as e:
+                    st.error(f"❌ Error processing quick sale: {str(e)}")
 
 def show_inventory_analysis():
     """Display inventory analysis interface."""
@@ -674,7 +772,7 @@ def show_multi_agent_chat():
     # Quick action buttons
     st.markdown("### 🚀 Quick Multi-Agent Commands")
     
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     
     with col1:
         if st.button("🔄 Comprehensive Analysis"):
@@ -697,6 +795,13 @@ def show_multi_agent_chat():
                 st.session_state.chat_history.append(("ABC + Stock Analysis", response))
                 st.rerun()
     
+    with col4:
+        if st.button("💰 Transaction Analytics"):
+            with st.spinner("Generating transaction analytics..."):
+                response = st.session_state.coordinator.process_message("sales report and daily summary")
+                st.session_state.chat_history.append(("Transaction Analytics", response))
+                st.rerun()
+    
     # Clear chat history
     if st.button("🗑️ Clear Chat History"):
         st.session_state.chat_history = []
@@ -707,7 +812,7 @@ def show_data_management():
     st.markdown("## 📝 Data Management")
     st.markdown("*Update your Google Sheets inventory data*")
     
-    tab1, tab2, tab3 = st.tabs(["📋 View Data", "➕ Add Products", "✏️ Update Products"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📋 View Data", "➕ Add Products", "✏️ Update Products", "💰 Quick Sale"])
     
     with tab1:
         st.markdown("### 📊 Current Inventory Data")
@@ -777,17 +882,60 @@ def show_data_management():
         # Add information about sheet access
         st.info("ℹ️ **Note**: Adding products requires write access to Google Sheets. If using a public sheet, it will be read-only.")
         
+        # Quick add from template
+        st.markdown("#### 🚀 Quick Add Templates")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            if st.button("💻 Add Electronics"):
+                st.session_state.template_category = "Electronics"
+                st.session_state.template_price = 500.00
+        
+        with col2:
+            if st.button("🎧 Add Audio"):
+                st.session_state.template_category = "Audio"
+                st.session_state.template_price = 150.00
+        
+        with col3:
+            if st.button("🖱️ Add Accessories"):
+                st.session_state.template_category = "Accessories"
+                st.session_state.template_price = 50.00
+        
+        st.markdown("---")
+        
         with st.form("add_product_form"):
             col1, col2 = st.columns(2)
             
             with col1:
-                product_id = st.text_input("Product ID*", placeholder="e.g., LAPTOP002")
+                product_id = st.text_input("Product ID*", placeholder="e.g., LAPTOP002", help="Use format: CATEGORY + NUMBER (e.g., LAPTOP002, PHONE003)")
                 product_name = st.text_input("Product Name*", placeholder="e.g., Gaming Laptop Pro")
-                quantity = st.number_input("Quantity*", min_value=0, value=0)
+                quantity = st.number_input("Initial Quantity*", min_value=0, value=10, help="Starting stock level")
             
             with col2:
-                price = st.number_input("Price*", min_value=0.0, value=0.0, format="%.2f")
-                category = st.selectbox("Category*", ["Electronics", "Audio", "Accessories"])
+                # Use template values if set
+                default_price = st.session_state.get('template_price', 0.0)
+                default_category = st.session_state.get('template_category', "Electronics")
+                
+                price = st.number_input("Unit Price*", min_value=0.01, value=default_price, format="%.2f")
+                category = st.selectbox("Category*", ["Electronics", "Audio", "Accessories"], 
+                                      index=["Electronics", "Audio", "Accessories"].index(default_category) if default_category in ["Electronics", "Audio", "Accessories"] else 0)
+                
+                # Additional fields
+                supplier = st.text_input("Supplier", placeholder="Optional - supplier name")
+            
+            # Product preview
+            if product_id and product_name and quantity >= 0 and price > 0:
+                st.markdown("#### 👀 Product Preview")
+                preview_col1, preview_col2 = st.columns(2)
+                
+                with preview_col1:
+                    st.metric("Product ID", product_id)
+                    st.metric("Initial Stock", f"{quantity} units")
+                
+                with preview_col2:
+                    st.metric("Unit Price", f"${price:.2f}")
+                    st.metric("Initial Value", f"${quantity * price:.2f}")
             
             submitted = st.form_submit_button("➕ Add Product", type="primary")
             
@@ -807,8 +955,27 @@ def show_data_management():
                             
                             if result.success:
                                 st.success(f"✅ Product {product_id} added successfully!")
-                                st.json(result.result)
-                                # Clear the form by rerunning
+                                
+                                # Show success details
+                                success_data = result.result
+                                st.markdown("#### 🎉 Product Added Successfully!")
+                                
+                                col_a, col_b, col_c = st.columns(3)
+                                with col_a:
+                                    st.metric("Product ID", success_data['product_id'])
+                                with col_b:
+                                    st.metric("Stock Level", f"{success_data['quantity']} units")
+                                with col_c:
+                                    st.metric("Total Value", f"${success_data['quantity'] * success_data['price']:.2f}")
+                                
+                                # Clear template values
+                                if 'template_category' in st.session_state:
+                                    del st.session_state.template_category
+                                if 'template_price' in st.session_state:
+                                    del st.session_state.template_price
+                                
+                                # Auto-refresh after 2 seconds
+                                st.balloons()
                                 st.rerun()
                             else:
                                 if "read-only" in str(result.error).lower():
@@ -820,6 +987,16 @@ def show_data_management():
                                     
                                     For now, you can view and analyze existing data, but cannot add new products through the app.
                                     """)
+                                elif "already exists" in str(result.error).lower():
+                                    st.error(f"❌ Product ID '{product_id}' already exists! Please use a different ID.")
+                                    
+                                    # Suggest alternative IDs
+                                    base_id = ''.join([c for c in product_id if c.isalpha()])
+                                    number_part = ''.join([c for c in product_id if c.isdigit()])
+                                    if number_part:
+                                        next_num = int(number_part) + 1
+                                        suggested_id = f"{base_id}{next_num:03d}"
+                                        st.info(f"💡 **Suggestion**: Try using '{suggested_id}' instead")
                                 else:
                                     st.error(f"❌ Error adding product: {result.error}")
                                 
@@ -828,6 +1005,64 @@ def show_data_management():
                             st.info("💡 **Tip**: If you're using a public Google Sheet, it's read-only. Consider setting up proper Google Sheets API credentials for write access.")
                 else:
                     st.error("❌ Please fill in all required fields")
+        
+        # Bulk add section
+        st.markdown("---")
+        st.markdown("#### 📦 Bulk Add Products")
+        
+        with st.expander("🔧 Bulk Add from CSV"):
+            st.markdown("""
+            **Upload a CSV file with the following columns:**
+            - Product ID, Product Name, Quantity, Price, Category
+            
+            **Example CSV format:**
+            ```
+            Product ID,Product Name,Quantity,Price,Category
+            LAPTOP003,Gaming Laptop Ultra,5,1599.99,Electronics
+            MOUSE002,Wireless Gaming Mouse,25,89.99,Accessories
+            ```
+            """)
+            
+            uploaded_file = st.file_uploader("Choose CSV file", type="csv")
+            
+            if uploaded_file is not None:
+                try:
+                    df = pd.read_csv(uploaded_file)
+                    st.dataframe(df)
+                    
+                    if st.button("📦 Add All Products from CSV"):
+                        with st.spinner("Adding products from CSV..."):
+                            success_count = 0
+                            error_count = 0
+                            
+                            for _, row in df.iterrows():
+                                try:
+                                    sheets_tool = GoogleSheetsInventoryTool()
+                                    result = sheets_tool.execute(GoogleSheetsInventoryInput(
+                                        action="add",
+                                        product_id=row['Product ID'],
+                                        product_name=row['Product Name'],
+                                        quantity=int(row['Quantity']),
+                                        price=float(row['Price']),
+                                        category=row['Category']
+                                    ))
+                                    
+                                    if result.success:
+                                        success_count += 1
+                                    else:
+                                        error_count += 1
+                                        
+                                except Exception as e:
+                                    error_count += 1
+                            
+                            if success_count > 0:
+                                st.success(f"✅ Successfully added {success_count} products!")
+                            if error_count > 0:
+                                st.warning(f"⚠️ {error_count} products failed to add (may already exist)")
+                                
+                except Exception as e:
+                    st.error(f"❌ Error reading CSV file: {str(e)}")
+                    st.info("💡 Make sure your CSV has the correct column names and format")
     
     with tab3:
         st.markdown("### ✏️ Update Existing Product")
@@ -899,6 +1134,159 @@ def show_data_management():
                                 
                         except Exception as e:
                             st.error(f"❌ Error: {str(e)}")
+    
+    with tab4:
+        st.markdown("### 💰 Quick Sale")
+        st.info("🚀 **Fast sales processing with automatic stock deduction and low stock alerts**")
+        
+        # Quick product lookup
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
+            search_product = st.text_input("🔍 Search Product:", placeholder="Type product name or ID...")
+            
+        with col2:
+            if st.button("🔍 Search", type="secondary"):
+                if search_product:
+                    with st.spinner("Searching products..."):
+                        try:
+                            sheets_tool = GoogleSheetsInventoryTool()
+                            result = sheets_tool.execute(GoogleSheetsInventoryInput(
+                                action="search",
+                                search_term=search_product
+                            ))
+                            
+                            if result.success and result.result:
+                                st.session_state.search_results = result.result
+                            else:
+                                st.warning("No products found matching your search")
+                                
+                        except Exception as e:
+                            st.error(f"❌ Search error: {str(e)}")
+        
+        # Display search results for quick selection
+        if 'search_results' in st.session_state and st.session_state.search_results:
+            st.markdown("#### 📦 Available Products:")
+            
+            for product in st.session_state.search_results[:5]:  # Show top 5 results
+                with st.expander(f"🏷️ {product['product_name']} ({product['product_id']}) - Stock: {product['quantity']} units"):
+                    col_a, col_b, col_c = st.columns([2, 1, 1])
+                    
+                    with col_a:
+                        st.write(f"**Category:** {product['category']}")
+                        st.write(f"**Price:** ${product['price']:.2f}")
+                        
+                        # Stock status indicator
+                        if product['quantity'] == 0:
+                            st.error("🚨 OUT OF STOCK")
+                        elif product['quantity'] <= 10:
+                            st.warning(f"⚠️ LOW STOCK ({product['quantity']} left)")
+                        else:
+                            st.success(f"✅ In Stock ({product['quantity']} available)")
+                    
+                    with col_b:
+                        sale_qty = st.number_input(
+                            "Qty to Sell:", 
+                            min_value=1, 
+                            max_value=product['quantity'] if product['quantity'] > 0 else 0,
+                            value=1,
+                            key=f"qty_{product['product_id']}"
+                        )
+                    
+                    with col_c:
+                        if product['quantity'] > 0:
+                            if st.button(f"💰 Sell", key=f"sell_{product['product_id']}", type="primary"):
+                                # Process quick sale
+                                with st.spinner("Processing sale..."):
+                                    try:
+                                        # Initialize transaction agent if not exists
+                                        if 'transaction_agent' not in st.session_state:
+                                            spreadsheet_id = (
+                                                os.getenv("GOOGLE_SHEETS_INVENTORY_ID") or 
+                                                st.secrets.get("GOOGLE_SHEETS_INVENTORY_ID", None) or
+                                                "1CyA1nOnQ8Bzdqi60Xqk8dWcL32Zpx6ktUw_-HTeKNE8"
+                                            )
+                                            st.session_state.transaction_agent = TransactionAgent(spreadsheet_id=spreadsheet_id)
+                                        
+                                        # Process the sale
+                                        message = f"Sell {sale_qty} {product['product_id']} for ${product['price']:.2f}"
+                                        response = st.session_state.transaction_agent.process_message(message)
+                                        
+                                        if "✅" in response:
+                                            st.success(f"✅ Sale completed! Sold {sale_qty} units of {product['product_name']}")
+                                            
+                                            # Check for low stock alert
+                                            new_stock = product['quantity'] - sale_qty
+                                            if new_stock <= 10 and new_stock > 0:
+                                                st.warning(f"⚠️ **LOW STOCK ALERT**: {product['product_name']} now has only {new_stock} units left!")
+                                            elif new_stock == 0:
+                                                st.error(f"🚨 **OUT OF STOCK**: {product['product_name']} is now out of stock!")
+                                            
+                                            # Clear search results to refresh
+                                            if 'search_results' in st.session_state:
+                                                del st.session_state.search_results
+                                            st.rerun()
+                                        else:
+                                            st.error("❌ Sale failed!")
+                                            st.text(response)
+                                            
+                                    except Exception as e:
+                                        st.error(f"❌ Error processing sale: {str(e)}")
+                        else:
+                            st.error("❌ Out of Stock")
+        
+        # Manual sale form for direct entry
+        st.markdown("---")
+        st.markdown("#### ✏️ Manual Sale Entry")
+        
+        with st.form("quick_sale_form"):
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                manual_product_id = st.text_input("Product ID*", placeholder="e.g., LAPTOP001")
+                manual_quantity = st.number_input("Quantity*", min_value=1, value=1)
+            
+            with col2:
+                manual_price = st.number_input("Unit Price*", min_value=0.01, value=0.01, format="%.2f")
+                customer_name = st.text_input("Customer", placeholder="Optional")
+            
+            with col3:
+                st.write("") # Spacer
+                st.write("") # Spacer
+                manual_sale_submitted = st.form_submit_button("💰 Process Sale", type="primary")
+            
+            if manual_sale_submitted:
+                if all([manual_product_id, manual_quantity > 0, manual_price > 0]):
+                    with st.spinner("Processing manual sale..."):
+                        try:
+                            # Initialize transaction agent if not exists
+                            if 'transaction_agent' not in st.session_state:
+                                spreadsheet_id = (
+                                    os.getenv("GOOGLE_SHEETS_INVENTORY_ID") or 
+                                    st.secrets.get("GOOGLE_SHEETS_INVENTORY_ID", None) or
+                                    "1CyA1nOnQ8Bzdqi60Xqk8dWcL32Zpx6ktUw_-HTeKNE8"
+                                )
+                                st.session_state.transaction_agent = TransactionAgent(spreadsheet_id=spreadsheet_id)
+                            
+                            # Build sale message
+                            message = f"Sell {manual_quantity} {manual_product_id} for ${manual_price:.2f}"
+                            if customer_name:
+                                message += f" to {customer_name}"
+                            
+                            response = st.session_state.transaction_agent.process_message(message)
+                            
+                            if "✅" in response:
+                                st.success("✅ Manual sale completed successfully!")
+                                st.markdown(response)
+                                st.rerun()
+                            else:
+                                st.error("❌ Manual sale failed!")
+                                st.markdown(response)
+                                
+                        except Exception as e:
+                            st.error(f"❌ Error processing manual sale: {str(e)}")
+                else:
+                    st.error("❌ Please fill in all required fields")
 
 def show_system_settings():
     """Display system settings and configuration."""
@@ -1018,6 +1406,181 @@ GOOGLE_SHEETS_INVENTORY_ID=your_sheet_id_here
                     
                     **See GOOGLE_SHEETS_SETUP.md for detailed instructions**
                     """)
+
+def show_transaction_management():
+    """Display transaction management interface."""
+    st.markdown("## 💰 Transaction Management")
+    st.markdown("*Process sales, purchases, and track transaction history*")
+    
+    # Initialize transaction agent if not in session state
+    if 'transaction_agent' not in st.session_state:
+        spreadsheet_id = (
+            os.getenv("GOOGLE_SHEETS_INVENTORY_ID") or 
+            st.secrets.get("GOOGLE_SHEETS_INVENTORY_ID", None) or
+            "1CyA1nOnQ8Bzdqi60Xqk8dWcL32Zpx6ktUw_-HTeKNE8"
+        )
+        st.session_state.transaction_agent = TransactionAgent(spreadsheet_id=spreadsheet_id)
+    
+    tab1, tab2, tab3, tab4 = st.tabs(["💰 Process Sale", "📦 Purchase/Restock", "📊 Transaction History", "📈 Analytics"])
+    
+    with tab1:
+        st.markdown("### 💰 Process Sale Transaction")
+        st.info("💡 **Sales automatically reduce inventory levels and create transaction records**")
+        
+        with st.form("sale_form"):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                sale_product_id = st.text_input("Product ID*", placeholder="e.g., LAPTOP001")
+                sale_quantity = st.number_input("Quantity*", min_value=1, value=1)
+                sale_price = st.number_input("Unit Price*", min_value=0.01, value=0.01, format="%.2f")
+            
+            with col2:
+                customer_name = st.text_input("Customer Name", placeholder="e.g., John Doe")
+                customer_email = st.text_input("Customer Email", placeholder="e.g., john@example.com")
+                sale_notes = st.text_area("Notes", placeholder="Order details, special instructions...")
+            
+            sale_submitted = st.form_submit_button("💰 Process Sale", type="primary")
+            
+            if sale_submitted:
+                if all([sale_product_id, sale_quantity > 0, sale_price > 0]):
+                    customer_info = f"{customer_name} - {customer_email}".strip(" - ") if customer_name or customer_email else None
+                    
+                    with st.spinner("Processing sale..."):
+                        try:
+                            message = f"Sell {sale_quantity} {sale_product_id} for ${sale_price:.2f}"
+                            if customer_info:
+                                message += f" to {customer_info}"
+                            if sale_notes:
+                                message += f" - {sale_notes}"
+                            
+                            response = st.session_state.transaction_agent.process_message(message)
+                            
+                            if "✅" in response:
+                                st.success("Sale completed successfully!")
+                                st.markdown(response)
+                                # Clear form by rerunning
+                                st.rerun()
+                            else:
+                                st.error("Sale failed!")
+                                st.markdown(response)
+                                
+                        except Exception as e:
+                            st.error(f"❌ Error processing sale: {str(e)}")
+                else:
+                    st.error("❌ Please fill in all required fields")
+    
+    with tab2:
+        st.markdown("### 📦 Purchase/Restock Transaction")
+        st.info("💡 **Purchases automatically increase inventory levels and track costs**")
+        
+        with st.form("purchase_form"):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                purchase_product_id = st.text_input("Product ID*", placeholder="e.g., LAPTOP001")
+                purchase_quantity = st.number_input("Quantity*", min_value=1, value=1)
+                purchase_cost = st.number_input("Unit Cost*", min_value=0.01, value=0.01, format="%.2f")
+            
+            with col2:
+                supplier_name = st.text_input("Supplier", placeholder="e.g., Tech Supplier Inc")
+                purchase_notes = st.text_area("Notes", placeholder="Purchase order details, delivery info...")
+            
+            purchase_submitted = st.form_submit_button("📦 Process Purchase", type="primary")
+            
+            if purchase_submitted:
+                if all([purchase_product_id, purchase_quantity > 0, purchase_cost > 0]):
+                    with st.spinner("Processing purchase..."):
+                        try:
+                            message = f"Purchase {purchase_quantity} {purchase_product_id} at ${purchase_cost:.2f} each"
+                            if supplier_name:
+                                message += f" from {supplier_name}"
+                            if purchase_notes:
+                                message += f" - {purchase_notes}"
+                            
+                            response = st.session_state.transaction_agent.process_message(message)
+                            
+                            if "✅" in response:
+                                st.success("Purchase completed successfully!")
+                                st.markdown(response)
+                                # Clear form by rerunning
+                                st.rerun()
+                            else:
+                                st.error("Purchase failed!")
+                                st.markdown(response)
+                                
+                        except Exception as e:
+                            st.error(f"❌ Error processing purchase: {str(e)}")
+                else:
+                    st.error("❌ Please fill in all required fields")
+    
+    with tab3:
+        st.markdown("### 📊 Transaction History")
+        
+        col1, col2 = st.columns([1, 1])
+        
+        with col1:
+            if st.button("📋 Show All Transactions"):
+                with st.spinner("Loading transaction history..."):
+                    response = st.session_state.transaction_agent.process_message("show transaction history")
+                    st.markdown(response)
+            
+            if st.button("📅 Today's Summary"):
+                with st.spinner("Generating daily summary..."):
+                    response = st.session_state.transaction_agent.process_message("daily summary")
+                    st.markdown(response)
+        
+        with col2:
+            # Product-specific history
+            product_id = st.text_input("Product History:", placeholder="e.g., LAPTOP001")
+            if st.button("🔍 Product History") and product_id:
+                with st.spinner(f"Loading history for {product_id}..."):
+                    response = st.session_state.transaction_agent.process_message(f"product history for {product_id}")
+                    st.markdown(response)
+    
+    with tab4:
+        st.markdown("### 📈 Transaction Analytics")
+        
+        col1, col2 = st.columns([1, 1])
+        
+        with col1:
+            if st.button("💰 Sales Report"):
+                with st.spinner("Generating sales report..."):
+                    response = st.session_state.transaction_agent.process_message("sales report")
+                    st.markdown(response)
+        
+        with col2:
+            if st.button("📊 Revenue Analysis"):
+                with st.spinner("Analyzing revenue..."):
+                    response = st.session_state.transaction_agent.process_message("sales analytics")
+                    st.markdown(response)
+        
+        # Quick actions
+        st.markdown("---")
+        st.markdown("### 🚀 Quick Actions")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            if st.button("🔄 Stock Adjustment"):
+                st.info("💡 Use format: 'Adjust LAPTOP001 by +5 units (reason)'")
+                adjustment_query = st.text_input("Adjustment:", placeholder="Adjust LAPTOP001 by +5 (found extra)")
+                if st.button("⚙️ Process Adjustment") and adjustment_query:
+                    with st.spinner("Processing adjustment..."):
+                        response = st.session_state.transaction_agent.process_message(adjustment_query)
+                        st.markdown(response)
+        
+        with col2:
+            if st.button("📊 Best Sellers"):
+                with st.spinner("Finding best sellers..."):
+                    response = st.session_state.transaction_agent.process_message("show best selling products")
+                    st.markdown(response)
+        
+        with col3:
+            if st.button("💹 Profit Analysis"):
+                with st.spinner("Calculating profits..."):
+                    response = st.session_state.transaction_agent.process_message("calculate profit margins")
+                    st.markdown(response)
 
 if __name__ == "__main__":
     main()

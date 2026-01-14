@@ -6,6 +6,7 @@ from typing import Dict, Any, List
 from src.agents.base_agent import BaseAgent
 from src.agents.inventory_agent import InventoryAgent
 from src.agents.stock_calculator_agent import StockCalculatorAgent
+from src.agents.transaction_agent import TransactionAgent
 from src.tools.google_sheets_inventory_tool import GoogleSheetsInventoryTool, GoogleSheetsInventoryInput
 
 
@@ -62,6 +63,7 @@ class InventoryCoordinatorAgent(BaseAgent):
         # Initialize specialist agents
         self.inventory_agent = InventoryAgent(spreadsheet_id=spreadsheet_id)
         self.calculator_agent = StockCalculatorAgent(spreadsheet_id=spreadsheet_id)
+        self.transaction_agent = TransactionAgent(spreadsheet_id=spreadsheet_id)
         
         # Initialize direct Google Sheets tool for updates
         self.sheets_tool = GoogleSheetsInventoryTool(spreadsheet_id=spreadsheet_id)
@@ -69,6 +71,7 @@ class InventoryCoordinatorAgent(BaseAgent):
         # Wrap agents as tools
         inventory_tool = AgentTool(self.inventory_agent)
         calculator_tool = AgentTool(self.calculator_agent)
+        transaction_tool = AgentTool(self.transaction_agent)
         
         super().__init__(
             name="inventory_coordinator",
@@ -79,7 +82,8 @@ class InventoryCoordinatorAgent(BaseAgent):
         # Store agent tools
         self.agent_tools = {
             'inventory': inventory_tool,
-            'calculator': calculator_tool
+            'calculator': calculator_tool,
+            'transaction': transaction_tool
         }
         
         # Track conversation context for intelligent routing
@@ -113,6 +117,8 @@ class InventoryCoordinatorAgent(BaseAgent):
                 response = self._delegate_to_calculator_agent(message)
             elif request_type == "action_plan":
                 response = self._generate_action_plan(message)
+            elif request_type == "transaction_focus":
+                response = self._delegate_to_transaction_agent(message)
             else:
                 response = self._handle_general_coordination(message)
                 
@@ -137,6 +143,10 @@ class InventoryCoordinatorAgent(BaseAgent):
         # Data update requests
         elif any(word in message_lower for word in ['update', 'add', 'change', 'modify', 'set']):
             return "data_update"
+        
+        # Transaction requests
+        elif any(word in message_lower for word in ['sell', 'sale', 'sold', 'buy', 'purchase', 'transaction']):
+            return "transaction_focus"
         
         # Calculation-focused requests
         elif any(word in message_lower for word in ['calculate', 'reorder', 'eoq', 'financial', 'turnover', 'abc', 'optimal']):
@@ -419,6 +429,32 @@ For stock level analysis or alerts, try commands like:
         except Exception as e:
             return f"❌ Error delegating to calculator agent: {str(e)}"
     
+    def _delegate_to_transaction_agent(self, message: str) -> str:
+        """Delegate to transaction agent."""
+        try:
+            result = self.agent_tools['transaction'].execute({'message': message})
+            
+            # Add coordinator context
+            response = f"""💰 **TRANSACTION RESULTS:**
+═══════════════════════════════════════
+
+{result['result']}
+
+═══════════════════════════════════════
+
+🤖 **Coordinator Note:** This transaction was processed by the Transaction Agent.
+Inventory levels have been automatically updated in Google Sheets.
+For inventory analysis or calculations, try commands like:
+• "Analyze stock levels"
+• "Calculate reorder points"
+• "Show transaction history"
+"""
+            
+            return response
+            
+        except Exception as e:
+            return f"❌ Error delegating to transaction agent: {str(e)}"
+    
     def _generate_action_plan(self, message: str) -> str:
         """Generate prioritized action plan based on current inventory status."""
         try:
@@ -516,6 +552,12 @@ I orchestrate multiple specialized agents for comprehensive inventory management
 • "Generate financial report" - Investment analysis
 • "Perform ABC analysis" - Strategic classification
 • "Calculate optimal stock levels" - Min/max recommendations
+
+💰 **Transaction Agent** - Sales & Purchase Management:
+• "Sell 2 LAPTOP001 for $1299.99 to John Doe" - Process sales
+• "Purchase 10 LAPTOP001 at $1200 each" - Handle restocking
+• "Show transaction history" - View recent transactions
+• "Daily summary" - Transaction analytics
 
 🤝 **COORDINATED ANALYSIS:**
 • "Generate dashboard" - Executive overview

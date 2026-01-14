@@ -1,6 +1,36 @@
 # 📊 Multi-Agent Inventory Management System
 
-A sophisticated inventory management system powered by specialized AI agents that connect to Darabase Google Sheets for real-time inventory tracking, analysis, and optimization.
+A sophisticated inventory management system powered by specialized AI agents that connect to Google Sheets for real-time inventory tracking, analysis, and optimization.
+
+## ✨ Enhanced Features (Latest Update)
+
+### 🆕 **Direct Product Management**
+- ➕ **Add Products Directly**: Add new inventory items through the web interface
+- 🚀 **Quick Add Templates**: Pre-configured templates for Electronics, Audio, and Accessories
+- 📦 **Bulk Import**: Upload CSV files to add multiple products at once
+- ✅ **Smart Validation**: Automatic duplicate detection and ID suggestions
+- 💡 **Real-time Preview**: See product details before adding
+
+### 💰 **Advanced Sales Processing**
+- 🛒 **Quick Sale Interface**: Process sales with automatic stock deduction
+- 🔍 **Stock Availability Check**: Real-time inventory validation before sales
+- 🚨 **Instant Alerts**: Immediate low stock warnings after each sale
+- 👤 **Customer Tracking**: Record customer information with each transaction
+- 📊 **Sales Analytics**: Performance metrics and revenue tracking
+
+### 🚨 **Real-Time Stock Alerts**
+- **🚨 Critical Alerts**: Out of stock items (cannot sell)
+- **🔴 High Priority**: Critical stock (≤5 units, limit sales to 1 per customer)
+- **🟡 Medium Priority**: Low stock (6-10 units, monitor closely)
+- **💰 Financial Impact**: Calculate lost revenue and at-risk inventory value
+- **📧 Action Items**: Automated reorder suggestions and management notifications
+
+### 📈 **Enhanced Dashboard**
+- **Interactive Visualizations**: Plotly charts for stock distribution and trends
+- **Real-time Metrics**: Live inventory value and stock status indicators
+- **Quick Actions**: One-click access to sales, alerts, and reports
+- **Stock Status Grid**: Visual indicators for all inventory levels
+- **Financial Overview**: Revenue, costs, and profit analysis
 
 ## 🤖 Multi-Agent Architecture
 
@@ -27,6 +57,23 @@ Handles all financial calculations and optimization:
 - **Turnover Analysis**: How fast products move
 - **ABC Analysis**: Strategic product classification
 - **Optimal Stock Levels**: Min/max recommendations
+
+### 💰 **Sales Agent** *(New)*
+Specialized in sales operations with automatic inventory management:
+- **Quick Sales Processing**: Fast transaction processing with stock validation
+- **Automatic Stock Deduction**: Real-time inventory updates after each sale
+- **Stock Availability Checking**: Pre-sale inventory validation
+- **Sales Analytics**: Revenue tracking and performance metrics
+- **Customer Management**: Transaction history and customer information
+- **Real-time Alerts**: Instant low stock notifications after sales
+
+### 🔄 **Transaction Agent**
+Manages all inventory movements and transaction history:
+- **Sales Transactions**: Process customer purchases with stock updates
+- **Purchase/Restock**: Handle supplier orders and inventory additions
+- **Stock Adjustments**: Corrections and manual inventory changes
+- **Transaction History**: Complete audit trail of all movements
+- **Financial Tracking**: Revenue, costs, and profit calculations
 
 ## 🚀 Key Features
 
