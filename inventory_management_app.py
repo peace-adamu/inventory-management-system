@@ -914,8 +914,12 @@ def show_data_management():
             
             with col2:
                 # Use template values if set
-                default_price = st.session_state.get('template_price', 0.0)
+                default_price = st.session_state.get('template_price', 0.01)
                 default_category = st.session_state.get('template_category', "Electronics")
+                
+                # Ensure default price is at least the minimum value
+                if default_price < 0.01:
+                    default_price = 0.01
                 
                 price = st.number_input("Unit Price*", min_value=0.01, value=default_price, format="%.2f")
                 category = st.selectbox("Category*", ["Electronics", "Audio", "Accessories"], 
