@@ -602,7 +602,7 @@ def show_inventory_analysis():
                 response = st.session_state.coordinator.process_message("analyze stock levels")
                 st.markdown(response)
         
-        if st.button("⚠️ Low Stock Report"):
+        if st.button("⚠️ Generate Low Stock Report"):
             with st.spinner("Generating low stock report..."):
                 response = st.session_state.coordinator.process_message("generate low stock report")
                 st.markdown(response)
@@ -853,7 +853,7 @@ def show_data_management():
             search_term = st.text_input("Search Products:", placeholder="Product name or ID")
             category_filter = st.selectbox("Filter by Category:", ["", "Electronics", "Audio", "Accessories"])
             
-            if st.button("🔍 Search") and (search_term or category_filter):
+            if st.button("🔍 Search", key="search_products_tab1") and (search_term or category_filter):
                 with st.spinner("Searching..."):
                     try:
                         sheets_tool = GoogleSheetsInventoryTool()
@@ -1150,7 +1150,7 @@ def show_data_management():
             search_product = st.text_input("🔍 Search Product:", placeholder="Type product name or ID...")
             
         with col2:
-            if st.button("🔍 Search", type="secondary"):
+            if st.button("🔍 Find Product", type="secondary", key="search_quick_sale"):
                 if search_product:
                     with st.spinner("Searching products..."):
                         try:
