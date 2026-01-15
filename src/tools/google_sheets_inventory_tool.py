@@ -249,7 +249,12 @@ class GoogleSheetsInventoryTool(BaseTool):
         current_data = self._check_product(product_id)
         row_number = current_data["row_number"]
         
+        # Get worksheet and check if it's a public sheet
         worksheet = self._get_worksheet()
+        
+        # Handle public sheet access (read-only)
+        if self._is_public_sheet or worksheet == "public_sheet_access":
+            raise ValueError("Cannot update products in public sheet. Sheet is read-only. Please use a private Google Sheet with proper API credentials for write access.")
         
         # Update fields
         updates = []
@@ -277,11 +282,12 @@ class GoogleSheetsInventoryTool(BaseTool):
         if not all([product_id, product_name, quantity is not None, price is not None, category]):
             raise ValueError("All fields required: product_id, product_name, quantity, price, category")
         
-        # Handle public sheet access (read-only)
-        if self._is_public_sheet:
-            raise ValueError("Cannot add products to public sheet. Sheet is read-only.")
-        
+        # Get worksheet first to check if it's a public sheet
         worksheet = self._get_worksheet()
+        
+        # Handle public sheet access (read-only)
+        if self._is_public_sheet or worksheet == "public_sheet_access":
+            raise ValueError("Cannot add products to public sheet. Sheet is read-only. Please use a private Google Sheet with proper API credentials for write access.")
         
         # Check if product already exists
         try:
